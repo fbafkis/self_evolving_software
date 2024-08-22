@@ -2,31 +2,27 @@ const {
   saveNewPluginToDb,
   saveUserRequestForExistingPlugin,
   getPluginById,
-} = require("./database"); // For saving plugin information to the database
-
+} = require("./database");
 const {
   createGPTNegativeFeedbackNewPluginRequest,
   createGPTNegativeFeedbackExistingPluginRequest,
-} = require("./requestsCreation"); // For creating requests to send to GPT based on user feedback
-
-const axios = require("axios"); // For making HTTP requests in getChatGptResponse
+} = require("./requestsCreation");
+const axios = require("axios");
 const {
   installDependencies,
   cleanupUnusedDependencies,
-} = require("./dependencies"); // For managing dependencies in handleGPTResponse
-const { executePlugin } = require("./pluginExecution"); // For executing the plugin in handleGPTResponse
-
+} = require("./dependencies");
+const { executePlugin } = require("./pluginExecution");
 const { state, readline, sanitizeInput } = require("./utils");
-const {logger} = require("./logger");
+const logger = require("./logger");
 
-const apiKey = "213438401d774c4b99831f52b12ebd3c"; // Insert the key
-const apiBase = "https://rt-bdi-gpt4.openai.azure.com/"; // Your endpoint
+// ChatGPT connection parameters
+const apiKey = "213438401d774c4b99831f52b12ebd3c"; // API key for ChatGPT
+const apiBase = "https://rt-bdi-gpt4.openai.azure.com/"; // The endpoint
 const apiVersion = "2023-05-15"; // API version
 const deploymentName = "izzo-bozzo-gpt4"; // Deployment name
 
-
-// User interaction
-
+// Function to get the initial user request
 async function getUserRequest() {
   return new Promise((resolve, reject) => {
     readline.question("Enter your request: ", (userInput) => {
@@ -34,15 +30,14 @@ async function getUserRequest() {
         reject(new Error("Please provide a user request."));
         return;
       }
-
+      // Input sanitizatoin and trimming
       const sanitizedInput = sanitizeInput(userInput.trim());
-      resolve(sanitizedInput); // Return the sanitized input
+      resolve(sanitizedInput);
     });
   });
 }
 
-// Chat GPT interaction
-
+// Function to ask the user about user satisfaction for the plugin execution
 function askUserPluginFeedback() {
   return new Promise((resolve) => {
     readline.question(
@@ -50,23 +45,24 @@ function askUserPluginFeedback() {
       (answer) => {
         // Normalize the input to lower case and trim any extra whitespace
         const normalizedAnswer = answer.trim().toLowerCase();
-
         if (normalizedAnswer === "yes" || normalizedAnswer === "no") {
           resolve(normalizedAnswer);
         } else {
-          console.log("Invalid input. Please answer with 'yes' or 'no'.");
-          resolve(askUserPluginFeedback()); // Recursively ask until a valid answer is provided
+          logger.info("Invalid input. Please answer with 'yes' or 'no'.");
+          resolve(askUserPluginFeedback()); // Recursively ask for the feedback until a valid answer is provided
         }
       }
     );
   });
 }
 
+// Function to ask the use a comment about a negative feedback provided
 function askUserForNegativeFeedback() {
   return new Promise((resolve) => {
     readline.question(
       "Please, explain what was the problem with the result you got: ",
       (comment) => {
+        // Input sanitization and trimmming
         const sanitizedComment = sanitizeInput(comment.trim());
         resolve(sanitizedComment);
       }
@@ -74,22 +70,27 @@ function askUserForNegativeFeedback() {
   });
 }
 
+// Fucntion to handle the feedback provided by the user for a new plugin
 async function handleUserNewPluginFeedback(feedback) {
+  // Positive feedback
   if (feedback === "yes") {
-    console.log("Great! We're glad you're satisfied with the response.");
-    //TODO: save plugin to database along with associated user request
-
-    console.log("New plugin json:");
-    console.log(state.currentPluginJson);
-    await saveNewPluginToDb(state.currentPluginJson, state.currentUserRequest);
-  } else if (feedback === "no") {
-    console.log("Sorry to hear that. We'll try to improve.");
-    // Ask the user to explain the problem
-    state.currentProblemComment = await askUserForNegativeFeedback();
-    console.log(
-      "User prompt details about the problem:",
-      state.currentProblemComment
+    logger.info("Great! We're glad you're satisfied with the response.");
+    logger.debug(
+      "HandleUserNewPluginFeedback - New plugin json:\n" +
+        state.currentPluginJson
     );
+    // Saving the new plugin to the DB along with the associated request
+    await saveNewPluginToDb(state.currentPluginJson, state.currentUserRequest);
+    // Negative feedback
+  } else if (feedback === "no") {
+    logger.info("Sorry to hear that. We'll try to improve.");
+    // Ask the user a comment about the problem
+    state.currentProblemComment = await askUserForNegativeFeedback();
+    logger.debug(
+      "HandleUserNewPluginFeedback - User prompt details about the problem:\n" +
+        state.currentProblemComment
+    );
+    // Create message for ChatGPT about the negative feedback
     var GPTNegativeFeedbackNewPluginRequest =
       createGPTNegativeFeedbackNewPluginRequest(
         state.currentUserRequest,
@@ -97,39 +98,43 @@ async function handleUserNewPluginFeedback(feedback) {
         state.currentGPTResponse,
         state.currentPluginError
       );
-
-    console.log();
-
+    logger.info("Waiting for ChatGPT to answer ...");
+    // Sending the request to ChatGPT
     var newGPTResponse = await getChatGptResponse(
       GPTNegativeFeedbackNewPluginRequest
     );
-    console.log("New gpt response:");
-    console.log(GPTNegativeFeedbackNewPluginRequest);
+    logger.debug("HandleUserNewPluginFeedback - New GPT response:\n");
+    logger.debug(GPTNegativeFeedbackNewPluginRequest);
+    // Handle the new response from ChatGPT
     await handleGPTResponse(newGPTResponse);
+    // Ask again the user for the feedback
     const userNewPluginFeedback = await askUserPluginFeedback();
-    // Handle the user's satisfaction response
+    // Handle the user feedback again, and so on until it is positive
     await handleUserNewPluginFeedback(userNewPluginFeedback);
   }
 }
-
+// Function to handle the feedback provided by the user for an existing plugin
 async function handleUserExistingPluginFeedback(feedback) {
+  // Positive feedback
   if (feedback === "yes") {
-    console.log(
-      "Great! We're glad you're satisfied with the response. Saving the new request into the database. "
+    logger.info(
+      "Great! We're glad you're satisfied with the response. Saving the new request into the database."
     );
-
+    // Saving the new request successfully satisfied by the existing plugin choosed by ChatGPT
     await saveUserRequestForExistingPlugin(
       state.currentPluginJson.id,
       state.currentUserRequest
     );
+    // Negative feedback
   } else if (feedback === "no") {
-    console.log("Sorry to hear that. We'll try to improve.");
+    logger.info("Sorry to hear that. We'll try to improve.");
     // Ask the user to explain the problem
     state.currentProblemComment = await askUserForNegativeFeedback();
-    console.log(
-      "User prompt details about the problem:",
-      state.currentProblemComment
+    logger.debug(
+      "HandleUserExistingPluginFeedback - User prompt details about the problem:\n" +
+        state.currentProblemComment
     );
+    // Creating the appropriate request for ChatGPT about the negative feedback for the existing plugin execution
     var GPTNegativeFeedbackExistingPluginRequest =
       createGPTNegativeFeedbackExistingPluginRequest(
         state.currentUserRequest,
@@ -138,24 +143,26 @@ async function handleUserExistingPluginFeedback(feedback) {
         state.currentPluginError,
         state.pluginsJson
       );
-
-    console.log();
-
+    logger.info("Waiting for ChatGPT to answer ...");
+    // Getting the new response from ChatGPT
     var newGPTResponse = await getChatGptResponse(
       GPTNegativeFeedbackExistingPluginRequest
     );
-    console.log("New gpt response:");
-    console.log(GPTNegativeFeedbackExistingPluginRequest);
+    logger.debug("HandleUserExistingPluginFeedback - New GPT response:");
+    logger.debug(GPTNegativeFeedbackExistingPluginRequest);
+    // Handling the new reposnse
     await handleGPTResponse(newGPTResponse);
+    // Ask again the user for the feedback
     const userExistingPluginFeedback = await askUserPluginFeedback();
-    // Handle the user's satisfaction response
+    // Handle the user feedback again, and so on until a positive feedback
     await handleUserExistingPluginFeedback(userExistingPluginFeedback);
   }
 }
 
-
+// Function to get the ChatGPT response
 async function getChatGptResponse(request) {
   try {
+    // Making the http request
     const response = await axios.post(
       `${apiBase}/openai/deployments/${deploymentName}/chat/completions?api-version=${apiVersion}`,
       {
@@ -169,56 +176,63 @@ async function getChatGptResponse(request) {
         },
       }
     );
-
+    // Getting the response
     state.currentGPTResponse = response.data.choices[0].message.content;
     return response.data.choices[0].message.content;
   } catch (error) {
+    // If the rate limit is exceeded and it has to wait
     if (error.response && error.response.status === 429) {
-      console.error(
-        "Rate limit exceeded. Waiting for a while before retrying..."
+      logger.error(
+        "GetChatGPTResponse - Rate limit exceeded. Waiting for a while before retrying..."
       );
-      await new Promise((resolve) => setTimeout(resolve, 60000)); // Wait 60 seconds
-      return await getChatGptResponse(request); // Retry
+      // Wait 60 seconds
+      await new Promise((resolve) => setTimeout(resolve, 60000));
+      logger.info("Waiting for ChatGPT to answer ...");
+      // Try again
+      return await getChatGptResponse(request);
     } else {
-      throw error; // Re-throw the error if it is not a 429 error
+      throw error;
     }
   }
 }
 
+// Function to handle the ChatGPT response
 async function handleGPTResponse(gptResponse) {
   try {
     const responseObject = JSON.parse(gptResponse);
-
+    // Updating global variables
     state.currentPluginJson = {
       code: responseObject.newPluginCode,
       dependencies: responseObject.newPluginDependencies,
       description: responseObject.pluginDescription,
     };
-    // No suitable plugin found: producing and executing a new one.
+    // No suitable plugin found: producing and executing a new one
     if (
       responseObject.response === "no" &&
       responseObject.newPluginCode !== "null"
     ) {
-      console.log("Executing new plugin...");
-
+      logger.info("Executing new plugin...");
       const newPluginCode = responseObject.newPluginCode;
       const pluginArguments = responseObject.pluginArguments;
       const dependencies = responseObject.newPluginDependencies;
-
       // Dynamically install the dependencies provided by the GPT response
       installDependencies(dependencies);
-
+      // Executing the plugin
       try {
         state.currentPluginError = "";
         // Execute the new plugin with the provided arguments
         const result = await executePlugin(newPluginCode, pluginArguments);
-        console.log("Plugin execution result:", result);
-        // Ask the user if they are satisfied with the result
+        // Printing the result for the user
+        logger.info("Plugin execution result: " + result);
+        // Ask the user for the feedback
         const userNewPluginFeedback = await askUserPluginFeedback();
-        // Handle the user's satisfaction response
+        // Handle the user feedback
         await handleUserNewPluginFeedback(userNewPluginFeedback);
       } catch (error) {
-        console.error("Error during plugin execution:", error.message);
+        logger.error(
+          "HandleGPTResponse - Error during plugin execution:\n" + error.message
+        );
+        // If an error is thrown, remove the related dependencies, they will be kept only in case of success
         await cleanupUnusedDependencies(dependencies);
       }
       // Suitable existing plugin found
@@ -226,36 +240,41 @@ async function handleGPTResponse(gptResponse) {
       responseObject.response === "yes" &&
       responseObject.pluginId !== "null"
     ) {
-      //TODO: implement existing plugin execution
-      console.log(
-        "Executing existind plugin with ID " + responseObject.pluginId
+      logger.debug(
+        "HandleGPTResponse - Executing existing plugin with ID " +
+          responseObject.pluginId
       );
-
+      // Executing the existing plugin found suitable by ChatGPT
       try {
+        // Retrieve the existing plugin from the database
         const pluginDetails = await getPluginById(responseObject.pluginId);
         state.currentPluginJson = pluginDetails;
         const pluginArguments = responseObject.pluginArguments;
-
-        console.log(state.currentPluginJson);
-        // Install dependencies
+        logger.debug(
+          "HandleGPTResponse - Current plugin JSON:\n" + state.currentPluginJson
+        );
+        // Install dependencies (commented out because it shouldn't be needed and they should be already installed)
         //installDependencies(pluginDetails.dependencies.join(","));
-
         state.currentPluginError = "";
-        // Execute the plugin with the last known arguments
+        // Execute the plugin with the arguments provided by ChatGPT
         const result = await executePlugin(pluginDetails.code, pluginArguments);
-        console.log("Plugin execution result:", result);
-
-        // Ask the user if they are satisfied with the result
+        // Printing the result of the plugin execution for the user
+        logger.info("Plugin execution result: " + result);
+        // Ask the user for the feedback
         const userExistingPluginFeedback = await askUserPluginFeedback();
+        // Handle the user feedback
         await handleUserExistingPluginFeedback(userExistingPluginFeedback);
       } catch (error) {
         console.error("Error during plugin execution:", error.message);
       }
+      // If eventually no new or existing plugin is provided
     } else {
-      console.log("No valid plugin to execute.");
+      logger.error("HandleGPTResponse - No valid plugin to execute.");
     }
   } catch (err) {
-    console.error("Error handling GPT response:", err.message);
+    logger.error(
+      "HandleGPTResponse - Error handling GPT response:" + err.message
+    );
   }
 }
 

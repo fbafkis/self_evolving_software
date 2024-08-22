@@ -1,5 +1,4 @@
-
-
+// The intial request 
 function createGPTInitialRequest(currentUserRequest, pluginsJson) {
   let initialGPTRequest =
     `I ask you to perform a coverage evaluation of a feature by a series of plugins present within a software. You will need to analyze a request expressed by a human user and understand by analyzing the code and other information of the available plugins if one of them is able to satisfy the user's request.
@@ -50,6 +49,7 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson) {
   return initialGPTRequest;
 }
 
+// The request in case of negative feedback for a new plugin
 function createGPTNegativeFeedbackNewPluginRequest(
   currentUserRequest,
   problemComment,
@@ -109,6 +109,7 @@ There must be nothing else than the JSON in your response. It is a fundamental r
   return negativeFeedbackNewPluginGPTRequest;
 }
 
+// The request in case of negative feedback for an existing plugin
 function createGPTNegativeFeedbackExistingPluginRequest(
     currentUserRequest,
     problemComment,
