@@ -41,6 +41,15 @@ async function initDb() {
           FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
         )`);
     logger.debug("InitDb - Dependencies table created or already exists.");
+
+    // Create the chat history table
+    await dbRun(`CREATE TABLE IF NOT EXISTS chat_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+    logger.debug("InitDb - Chat history table created or already exists.");
   } catch (err) {
     logger.error("InitDb - DB run error:\n" + err.message);
   } finally {
@@ -293,17 +302,17 @@ async function saveUserRequestForExistingPlugin(pluginId, userRequestString) {
     logger.error("SaveUserRequestForExistingPlugin - Error:\n" + err.message);
     throw err;
   } finally {
-    // Close the database connection
-    db.close((err) => {
-      if (err) {
-        logger.error(
-          "SaveUserRequestForExistingPlugin - DB close error:\n" + err.message
-        );
-      }
-      logger.debug(
-        "SaveUserRequestForExistingPlugin - Closed the database connection."
+    try {
+      // Close the database connection
+      await db.close(err);
+    } catch (err) {
+      logger.error(
+        "SaveUserRequestForExistingPlugin - DB close error:\n" + err.message
       );
-    });
+    }
+    logger.debug(
+      "SaveUserRequestForExistingPlugin - Closed the database connection."
+    );
   }
 }
 
@@ -330,12 +339,12 @@ async function saveChatMessage(role, content) {
     );
     throw err;
   } finally {
-    db.close((err) => {
-      if (err) {
-        logger.error("SaveChatMessage - DB close error:\n" + err.message);
-      }
-      logger.debug("SaveChatMessage - Closed the database connection.");
-    });
+    try {
+      await db.close();
+    } catch (err) {
+      logger.error("SaveChatMessage - DB close error:\n" + err.message);
+    }
+    logger.debug("SaveChatMessage - Closed the database connection.");
   }
 }
 
@@ -361,13 +370,52 @@ async function getChatHistory() {
     );
     throw err;
   } finally {
-    db.close((err) => {
-      if (err) {
-        logger.error("GetChatHistory - DB close error:\n" + err.message);
-      }
-      logger.debug("GetChatHistory - Closed the database connection.");
-    });
+    try {
+      await db.close();
+    } catch (err) {
+      logger.error("GetChatHistory - DB close error:\n" + err.message);
+    }
+    logger.debug("GetChatHistory - Closed the database connection.");
   }
+}
+
+//Function to update a plugin's code specifying the ID
+async function updatePluginCode(pluginId, updatedCode) {
+  // Connect to the database
+  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+    if (err) {
+      logger.error(`UpdatePluginCode - DB connection error:\n${err.message}`);
+    }
+    logger.debug("UpdatePluginCode - Connected to the SQLite database.");
+  });
+
+  const dbRun = promisify(db.run).bind(db);
+
+  try {
+    // SQL query to update the plugin code
+    const updatePluginSql = `UPDATE plugins SET code = ? WHERE id = ?`;
+
+    // Execute the query with the updated code and plugin ID
+    await dbRun(updatePluginSql, [updatedCode, pluginId]);
+
+    logger.debug(
+      `UpdatePluginCode - Plugin ID ${pluginId} code updated successfully.`
+    );
+  } catch (err) {
+    logger.error(
+      `UpdatePluginCode - Error updating plugin code:\n${err.message}`
+    );
+    throw err;
+  } finally {
+    try {
+      // Close the database connection
+      await db.close();
+    } catch (err) {
+      logger.error(`UpdatePluginCode - DB close error:\n${err.message}`);
+    }
+    logger.debug("UpdatePluginCode - Closed the database connection.");
+  }
+  F;
 }
 
 module.exports = {
@@ -377,5 +425,6 @@ module.exports = {
   getPluginById,
   saveUserRequestForExistingPlugin,
   saveChatMessage,
-  getChatHistory
+  getChatHistory,
+  updatePluginCode,
 };

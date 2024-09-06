@@ -33,7 +33,7 @@ async function main() {
     // Get the user initial request
     state.currentUserRequest = await getUserRequest();
     //Get the chat history
-    chatHistory = await getChatHistory();
+    let chatHistory = await getChatHistory();
     // Compose the appropriate request for ChatGPT
     let GPTinitialRequest = createGPTInitialRequest(
       state.currentUserRequest,

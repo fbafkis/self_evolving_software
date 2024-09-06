@@ -18,7 +18,6 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
     pluginDescription: "null/description"
   }
   
-  
   where the response field can take the value yes or no depending on whether you believe there is a plugin available that can satisfy the user's request, while the pluginId field can take the value of the unique ID of the plugin that you believe can satisfy the request if it exists, or null if you believe that none of the available plugins can satisfy the request. The newPluginCode will contain the code of the new plugin you will produce and that will be attached, if you don't believe no one of the existing can satisfy the request. 
   The code of the plugin you produce must satisfies some specifications, since it will be used within a sandbox environment in NodeJS:
   
@@ -187,8 +186,36 @@ function createGPTNegativeFeedbackExistingPluginRequest(
   return negativeFeedbackNewPluginGPTRequest;
 }
 
+function createGPTMalfunctioningPluginRequest(
+  pluginCode,
+  userRequest,
+  pluginErrorMessage,
+  pluginArguments,
+  chatHistory
+) {
+  let handleMalfunctioningPluginGPTRequest =
+    `The plugin that has just been executed has encountered some errors while being executed. This is its code:\n` +
+    pluginCode +
+    `\n` +
+    `The request that the plungin should have satisfied is:\n` +
+    userRequest +
+    `\n` +
+    `This is the error message from the plugin execution:\n\"` +
+    pluginErrorMessage +
+    `\"\n` +
+    `These are the arguments passed to the plugin:\n\"` +
+    pluginArguments +
+    `\"\n` +
+    `You have to modify the plugin code, so that it works without thorwing errors.You can't modify the arguments. The new plugin code must work \"as is \", with the same arguments. In the response you have to provide only the complete code, and absoulutely nothing else. No titles, no other words, no special characters. You can also use the history of the chat between this application and you to provide a valid response in an easier and more effective way. The chat history is expressed as a JSON. Pay attention to the chat history to not repeat the same errors. 
+    Chat history:\n` +
+    chatHistory;
+
+  return handleMalfunctioningPluginGPTRequest;
+}
+
 module.exports = {
   createGPTInitialRequest,
   createGPTNegativeFeedbackNewPluginRequest,
   createGPTNegativeFeedbackExistingPluginRequest,
+  createGPTMalfunctioningPluginRequest,
 };

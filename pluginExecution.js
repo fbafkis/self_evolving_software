@@ -5,7 +5,7 @@ const { state } = require("./utils");
 
 // Function to execute the plugin
 async function executePlugin(pluginCode, pluginArguments) {
-  try {
+  // try {
     // Creating the sandbox for the plugin code execution
     const sandbox = { require, console, process, module: {}, exports: {} };
     // Creating the script and the context for the plugin
@@ -24,12 +24,12 @@ async function executePlugin(pluginCode, pluginArguments) {
         "PluginExecution - No valid function exported from the plugin code."
       );
     }
-  } catch (err) {
-    state.currentPluginError = err.message;
-    logger.error("PluginExecution - Error executing plugin:\n" + err.message);
-    // Return no result to display to the user
-    return null;
-  }
+  // } catch (err) {
+  //   state.currentPluginError = err.message;
+  //   logger.error("PluginExecution - Error executing plugin:\n" + err.message);
+  //   // Return no result to display to the user
+  //   //return null;
+  // }
 }
 
 module.exports = {

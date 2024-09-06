@@ -4,10 +4,12 @@ const {
   getPluginById,
   saveChatMessage,
   getChatHistory,
+  updatePluginCode,
 } = require("./database");
 const {
   createGPTNegativeFeedbackNewPluginRequest,
   createGPTNegativeFeedbackExistingPluginRequest,
+  createGPTMalfunctioningPluginRequest,
 } = require("./requestsCreation");
 const axios = require("axios");
 const {
@@ -17,6 +19,7 @@ const {
 const { executePlugin } = require("./pluginExecution");
 const { state, readline, sanitizeInput } = require("./utils");
 const logger = require("./logger");
+const { log } = require("winston");
 
 // ChatGPT connection parameters
 const apiKey = "213438401d774c4b99831f52b12ebd3c"; // API key for ChatGPT
@@ -238,6 +241,7 @@ async function handleGPTResponse(gptResponse) {
       installDependencies(dependencies);
       // Executing the plugin
       try {
+        logger.debug("Started execution of new plugin.");
         state.currentPluginError = "";
         // Execute the new plugin with the provided arguments
         const result = await executePlugin(newPluginCode, pluginArguments);
@@ -251,6 +255,15 @@ async function handleGPTResponse(gptResponse) {
         logger.error(
           "HandleGPTResponse - Error during plugin execution:\n" + error.message
         );
+        responseObject.newPluginCode = await handleMalfunctioningNewPlugin(
+          error.message,
+          state.currentUserRequest,
+          pluginArguments,
+          responseObject
+        );
+        logger.debug("Recursive call...");
+        // Call recursively the function
+        handleGPTResponse(JSON.stringify(responseObject));
         // If an error is thrown, remove the related dependencies, they will be kept only in case of success
         await cleanupUnusedDependencies(dependencies);
       }
@@ -276,19 +289,7 @@ async function handleGPTResponse(gptResponse) {
         //installDependencies(pluginDetails.dependencies.join(","));
         state.currentPluginError = "";
         // Execute the plugin with the arguments provided by ChatGPT
-        try {
-          const result = await executePlugin(
-            pluginDetails.code,
-            pluginArguments
-          );
-        } catch (err) {
-          await handleMalfunctioningExisistingPlugin(
-            err,
-            pluginDetails,
-            state.currentUserRequest,
-            pluginArguments
-          );
-        }
+        const result = await executePlugin(pluginDetails.code, pluginArguments);
         // Printing the result of the plugin execution for the user
         logger.info("Plugin execution result: " + result);
         // Ask the user for the feedback
@@ -296,7 +297,16 @@ async function handleGPTResponse(gptResponse) {
         // Handle the user feedback
         await handleUserExistingPluginFeedback(userExistingPluginFeedback);
       } catch (error) {
-        console.error("Generic error during plugin execution:", error.message);
+        console.error("Error during plugin execution:", error.message);
+        logger.debug("HandleGPTResponse - New plugin error intercepted.");
+        await handleMalfunctioningExisistingPlugin(
+          error.message,
+          pluginDetails,
+          state.currentUserRequest,
+          pluginArguments
+        );
+        // Recall recursively the function.
+        handleGPTResponse(gptResponse);
       }
       // If eventually no new or existing plugin is provided
     } else {
@@ -304,20 +314,86 @@ async function handleGPTResponse(gptResponse) {
     }
   } catch (err) {
     logger.error(
-      "HandleGPTResponse - Error handling GPT response:" + err.message
+      "HandleGPTResponse - Error handling GPT response: " + err.message
+    );
+  }
+}
+
+async function handleMalfunctioningNewPlugin(
+  pluginErrorMessage,
+  userRequest,
+  pluginArguments,
+  responseObject
+) {
+  try {
+    logger.info(
+      "A malfunction into the just created plugin has been detecting. Trying to solve the problem..."
+    );
+    //Get the chat history
+    logger.debug("Getting chat history...");
+    let chatHistory = await getChatHistory();
+    let malfunctioningNewPluginGPTRequest =
+      createGPTMalfunctioningPluginRequest(
+        responseObject.newPluginCode,
+        userRequest,
+        pluginErrorMessage,
+        pluginArguments,
+        chatHistory
+      );
+
+    logger.debug("Asking to GPT for the updated plugin code...");
+
+    // Making the request to GPT to get the new code
+    const updatedPluginCode = await getChatGptResponse(
+      malfunctioningNewPluginGPTRequest
+    );
+    // Debug printing the new code:
+    logger.debug("New plugin code: \n" + updatedPluginCode);
+    return updatedPluginCode;
+  } catch (err) {
+    logger.error(
+      "HandleMalfunctioningNewPlugin - Error getting GPT response: " +
+        err.message
     );
   }
 }
 
 async function handleMalfunctioningExisistingPlugin(
-  pluginError,
+  pluginErrorMessage,
   pluginDetails,
   userRequest,
   pluginArguments
 ) {
-
-
-  
+  logger.info(
+    "A malfunction into the existing plugin with id " +
+      pluginDetails.id +
+      " has been detecting. Trying to solve the problem..."
+  );
+  //Get the chat history
+  let chatHistory = await getChatHistory();
+  let malfunctioningExisistingPluginGPTRequest =
+    createGPTMalfunctioningPluginRequest(
+      pluginDetails.code,
+      userRequest,
+      pluginErrorMessage,
+      pluginArguments,
+      chatHistory
+    );
+  try {
+    // Making the request to GPT to get the new code
+    const updatedPluginCode = await getChatGptResponse(
+      malfunctioningExisistingPluginGPTRequest
+    );
+    // Debug printing the new code:
+    logger.debug("New plugin code: \n" + updatedPluginCode);
+    // Saving updated plugin code to database
+    await updatePluginCode(pluginDetails.id, updatedPluginCode);
+  } catch (err) {
+    logger.error(
+      "HandleMalfunctioningExistingPlugin - Error getting GPT response: " +
+        err.message
+    );
+  }
 }
 
 module.exports = {
