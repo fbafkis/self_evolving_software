@@ -2,6 +2,8 @@ const {
   saveNewPluginToDb,
   saveUserRequestForExistingPlugin,
   getPluginById,
+  saveChatMessage,
+  getChatHistory,
 } = require("./database");
 const {
   createGPTNegativeFeedbackNewPluginRequest,
@@ -90,22 +92,29 @@ async function handleUserNewPluginFeedback(feedback) {
       "HandleUserNewPluginFeedback - User prompt details about the problem:\n" +
         state.currentProblemComment
     );
+    //Get the chat history
+    chatHistory = await getChatHistory();
     // Create message for ChatGPT about the negative feedback
     var GPTNegativeFeedbackNewPluginRequest =
       createGPTNegativeFeedbackNewPluginRequest(
         state.currentUserRequest,
         state.currentProblemComment,
         state.currentGPTResponse,
-        state.currentPluginError
+        state.currentPluginError,
+        chatHistory
       );
     logger.info("Waiting for ChatGPT to answer ...");
     // Sending the request to ChatGPT
     var newGPTResponse = await getChatGptResponse(
       GPTNegativeFeedbackNewPluginRequest
     );
+    // Update chat History
+    await saveChatMessage("application", GPTNegativeFeedbackNewPluginRequest);
+    await saveChatMessage("GPT", newGPTResponse);
+    logger.debug("Chat history updated.");
+    // Handle the new response from ChatGPT
     logger.debug("HandleUserNewPluginFeedback - New GPT response:\n");
     logger.debug(GPTNegativeFeedbackNewPluginRequest);
-    // Handle the new response from ChatGPT
     await handleGPTResponse(newGPTResponse);
     // Ask again the user for the feedback
     const userNewPluginFeedback = await askUserPluginFeedback();
@@ -113,6 +122,7 @@ async function handleUserNewPluginFeedback(feedback) {
     await handleUserNewPluginFeedback(userNewPluginFeedback);
   }
 }
+
 // Function to handle the feedback provided by the user for an existing plugin
 async function handleUserExistingPluginFeedback(feedback) {
   // Positive feedback
@@ -134,6 +144,8 @@ async function handleUserExistingPluginFeedback(feedback) {
       "HandleUserExistingPluginFeedback - User prompt details about the problem:\n" +
         state.currentProblemComment
     );
+    //Get the chat history
+    chatHistory = await getChatHistory();
     // Creating the appropriate request for ChatGPT about the negative feedback for the existing plugin execution
     var GPTNegativeFeedbackExistingPluginRequest =
       createGPTNegativeFeedbackExistingPluginRequest(
@@ -148,9 +160,16 @@ async function handleUserExistingPluginFeedback(feedback) {
     var newGPTResponse = await getChatGptResponse(
       GPTNegativeFeedbackExistingPluginRequest
     );
+    // Update chat History
+    await saveChatMessage(
+      "application",
+      GPTNegativeFeedbackExistingPluginRequest
+    );
+    await saveChatMessage("GPT", newGPTResponse);
+    logger.debug("Chat history updated.");
+    // Handling the new reposnse
     logger.debug("HandleUserExistingPluginFeedback - New GPT response:");
     logger.debug(GPTNegativeFeedbackExistingPluginRequest);
-    // Handling the new reposnse
     await handleGPTResponse(newGPTResponse);
     // Ask again the user for the feedback
     const userExistingPluginFeedback = await askUserPluginFeedback();
@@ -257,7 +276,19 @@ async function handleGPTResponse(gptResponse) {
         //installDependencies(pluginDetails.dependencies.join(","));
         state.currentPluginError = "";
         // Execute the plugin with the arguments provided by ChatGPT
-        const result = await executePlugin(pluginDetails.code, pluginArguments);
+        try {
+          const result = await executePlugin(
+            pluginDetails.code,
+            pluginArguments
+          );
+        } catch (err) {
+          await handleMalfunctioningExisistingPlugin(
+            err,
+            pluginDetails,
+            state.currentUserRequest,
+            pluginArguments
+          );
+        }
         // Printing the result of the plugin execution for the user
         logger.info("Plugin execution result: " + result);
         // Ask the user for the feedback
@@ -265,7 +296,7 @@ async function handleGPTResponse(gptResponse) {
         // Handle the user feedback
         await handleUserExistingPluginFeedback(userExistingPluginFeedback);
       } catch (error) {
-        console.error("Error during plugin execution:", error.message);
+        console.error("Generic error during plugin execution:", error.message);
       }
       // If eventually no new or existing plugin is provided
     } else {
@@ -276,6 +307,17 @@ async function handleGPTResponse(gptResponse) {
       "HandleGPTResponse - Error handling GPT response:" + err.message
     );
   }
+}
+
+async function handleMalfunctioningExisistingPlugin(
+  pluginError,
+  pluginDetails,
+  userRequest,
+  pluginArguments
+) {
+
+
+  
 }
 
 module.exports = {

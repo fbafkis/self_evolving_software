@@ -1,5 +1,5 @@
-// The intial request 
-function createGPTInitialRequest(currentUserRequest, pluginsJson) {
+// The intial request
+function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
   let initialGPTRequest =
     `I ask you to perform a coverage evaluation of a feature by a series of plugins present within a software. You will need to analyze a request expressed by a human user and understand by analyzing the code and other information of the available plugins if one of them is able to satisfy the user's request.
           
@@ -35,7 +35,7 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson) {
   In case of negative response, and when a new plugin is produced, you also have to provide the list of packages' names that have to be installed with npm to run the new plugin, inside the newPluginDependencies field. They have to be expressed with comma separated format, just like the arguments field. If there are no dependencies, the field must be an empty array. The pluginArguments field must be a string that can be used "as is" to execute the plugin, containing also the parameters to call it extracing them from the user request. They must be comma separated. If no arguments are needed use "" and not "none" or any other word, only the empty quotes. 
   The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
   There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
-  
+  As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
   
   Input Data
   Below are the data you need to use to respond:
@@ -44,7 +44,10 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson) {
     currentUserRequest +
     "\n" +
     `\nallPlugins:\n` +
-    pluginsJson;
+    pluginsJson +
+    "\n" +
+    `\nchatHistory:\n` +
+    chatHistory;
 
   return initialGPTRequest;
 }
@@ -54,7 +57,8 @@ function createGPTNegativeFeedbackNewPluginRequest(
   currentUserRequest,
   problemComment,
   lastResponse,
-  pluginError
+  pluginError,
+  chatHistory
 ) {
   let negativeFeedbackNewPluginGPTRequest =
     `You have responded to this user's request:\n` +
@@ -70,13 +74,14 @@ function createGPTNegativeFeedbackNewPluginRequest(
     `You have to use this comment to try to understand what is wrong and adjust the response, and to produce a new response without the problems of previous one you provided. 
   The new response have to follow all the rules an specification as for the previous one.\n`;
 
-  if (pluginError && pluginError!=="") {
+  if (pluginError && pluginError !== "") {
     negativeFeedbackNewPluginGPTRequest +=
       `It is also available the error thrown previously by the plugin:\n` +
       pluginError;
   }
 
-  negativeFeedbackNewPluginGPTRequest += `\nOutput Description
+  negativeFeedbackNewPluginGPTRequest +=
+    `\nOutput Description
   IMPORTANT: The response you provide must be exclusively in the following JSON format with nothing else attached, so that your response can be parsed by the application code:
   
   {
@@ -104,42 +109,46 @@ function createGPTNegativeFeedbackNewPluginRequest(
   
 You also have to provide the list of packages' names that have to be installed with npm to run the new plugin, inside the newPluginDependencies field. They have to be expressed with comma separated format, just like the arguments field. If there are no dependencies, the field must be an empty array. If no dependencies are needed use "" and not "none" or any other word, only the empty quotes. The pluginArguments field must be a string that can be used "as is" to execute the plugin, containing also the parameters to call it extracing them from the user request. They must be comma separated. If no arguments are needed use "" and not "none" or any other word, only the empty quotes. 
 The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
-There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.`;
+There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
+As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
+chatHistory:\n` + chatHistory;
 
   return negativeFeedbackNewPluginGPTRequest;
 }
 
 // The request in case of negative feedback for an existing plugin
 function createGPTNegativeFeedbackExistingPluginRequest(
-    currentUserRequest,
-    problemComment,
-    lastResponse,
-    pluginError,
-    pluginsJson
-  ) {
-    let negativeFeedbackNewPluginGPTRequest =
-      `You have responded to this user's request:\n` +
-      currentUserRequest +
-      "\n" +
-      `with this response:\n` +
-      lastResponse +
-      "\n" +
-      `After the execution of the existing plugin, the user expressed a negative feedback about the result. So a wrong result or a problem in executing the plugin has occured. The user's comment about the negative feedback is:\n` +
-      '"' +
-      problemComment +
-      '"\n' +
-      `You have to use this comment to try to understand what is wrong and adjust the response, and to produce a new response without the problems of previous one you provided. Considering that you have previously decided that one of the already existing plugins was suitable to satisfy the request, here is the set of available plugins, so that you can eventaully reason again considering all the available plugins:\n` +  
-      pluginsJson +      
-      `\nYou can eventually decide that is better to create a new plugin. 
+  currentUserRequest,
+  problemComment,
+  lastResponse,
+  pluginError,
+  pluginsJson,
+  chatHistory
+) {
+  let negativeFeedbackNewPluginGPTRequest =
+    `You have responded to this user's request:\n` +
+    currentUserRequest +
+    "\n" +
+    `with this response:\n` +
+    lastResponse +
+    "\n" +
+    `After the execution of the existing plugin, the user expressed a negative feedback about the result. So a wrong result or a problem in executing the plugin has occured. The user's comment about the negative feedback is:\n` +
+    '"' +
+    problemComment +
+    '"\n' +
+    `You have to use this comment to try to understand what is wrong and adjust the response, and to produce a new response without the problems of previous one you provided. Considering that you have previously decided that one of the already existing plugins was suitable to satisfy the request, here is the set of available plugins, so that you can eventaully reason again considering all the available plugins:\n` +
+    pluginsJson +
+    `\nYou can eventually decide that is better to create a new plugin. 
     The new response have to follow all the rules an specification as for the previous one.\n`;
-  
-    if (pluginError && pluginError!=="") {
-      negativeFeedbackNewPluginGPTRequest +=
-        `It is also available the error thrown previously by the plugin:\n` +
-        pluginError;
-    }
-  
-    negativeFeedbackNewPluginGPTRequest += `\n
+
+  if (pluginError && pluginError !== "") {
+    negativeFeedbackNewPluginGPTRequest +=
+      `It is also available the error thrown previously by the plugin:\n` +
+      pluginError;
+  }
+
+  negativeFeedbackNewPluginGPTRequest +=
+    `\n
     
     Pobably you have to change the arguments to call the plugin, since it should be tested and working and approved by the user. You have to regenerate the response following the usual specifications for the output.
     
@@ -171,13 +180,15 @@ function createGPTNegativeFeedbackExistingPluginRequest(
     
   You also have to provide the list of packages' names that have to be installed with npm to run the new plugin, inside the newPluginDependencies field. They have to be expressed with comma separated format, just like the arguments field. If there are no dependencies, the field must be an empty array. If no dependencies are needed use "" and not "none" or any other word, only the empty quotes. The pluginArguments field must be a string that can be used "as is" to execute the plugin, containing also the parameters to call it extracing them from the user request. They must be comma separated. If no arguments are needed use "" and not "none" or any other word, only the empty quotes. 
   The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
-  There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.`;
-  
-    return negativeFeedbackNewPluginGPTRequest;
-  }
+  There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
+  As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
+  chatHistory:\n` + chatHistory;
+
+  return negativeFeedbackNewPluginGPTRequest;
+}
 
 module.exports = {
   createGPTInitialRequest,
   createGPTNegativeFeedbackNewPluginRequest,
-  createGPTNegativeFeedbackExistingPluginRequest
+  createGPTNegativeFeedbackExistingPluginRequest,
 };

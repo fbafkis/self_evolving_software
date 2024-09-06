@@ -1,5 +1,5 @@
 const { state, readline } = require("./utils.js");
-const { initDb, getAllPluginsFromDb } = require("./database");
+const { initDb, getAllPluginsFromDb, saveChatMessage, getChatHistory } = require("./database");
 const { createGPTInitialRequest } = require("./requestsCreation.js");
 const logger = require("./logger"); 
 const {
@@ -32,15 +32,21 @@ async function main() {
     );
     // Get the user initial request
     state.currentUserRequest = await getUserRequest();
+    //Get the chat history
+    chatHistory = await getChatHistory();
     // Compose the appropriate request for ChatGPT
     let GPTinitialRequest = createGPTInitialRequest(
       state.currentUserRequest,
-      state.pluginsJson
+      state.pluginsJson, 
+      chatHistory
     );
     logger.info("Waiting for ChatGPT to answer ...");
     // Send the composed request to ChatGPT
     let gptResponse = await getChatGptResponse(GPTinitialRequest);
     logger.debug("GPT response:\n" + gptResponse);
+    // Update chat History
+    await saveChatMessage("application", GPTinitialRequest);
+    await saveChatMessage("GPT", gptResponse);
     // Handle the ChatGPT response
     await handleGPTResponse(gptResponse);
     // Restart recursively the loop after processing the request

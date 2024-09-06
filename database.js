@@ -307,10 +307,75 @@ async function saveUserRequestForExistingPlugin(pluginId, userRequestString) {
   }
 }
 
+// Function to save a message to chat history
+async function saveChatMessage(role, content) {
+  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+    if (err) {
+      logger.error(err.message);
+    }
+    logger.debug("SaveChatMessage - Connected to the SQLite database.");
+  });
+
+  const dbRun = promisify(db.run).bind(db);
+
+  try {
+    const insertMessageSql = `INSERT INTO chat_history (role, content) VALUES (?, ?)`;
+    await dbRun(insertMessageSql, [role, content]);
+    logger.debug(
+      `SaveChatMessage - Chat message saved successfully (role: ${role}).`
+    );
+  } catch (err) {
+    logger.error(
+      "SaveChatMessage - Error saving chat message:\n" + err.message
+    );
+    throw err;
+  } finally {
+    db.close((err) => {
+      if (err) {
+        logger.error("SaveChatMessage - DB close error:\n" + err.message);
+      }
+      logger.debug("SaveChatMessage - Closed the database connection.");
+    });
+  }
+}
+
+// Function to retrieve chat history
+async function getChatHistory() {
+  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+    if (err) {
+      logger.error(err.message);
+    }
+    logger.debug("GetChatHistory - Connected to the SQLite database.");
+  });
+
+  const dbAll = promisify(db.all).bind(db);
+
+  try {
+    const selectMessagesSql = `SELECT role, content, timestamp FROM chat_history ORDER BY timestamp ASC`;
+    const rows = await dbAll(selectMessagesSql);
+    logger.debug("GetChatHistory - Chat history retrieved successfully.");
+    return rows;
+  } catch (err) {
+    logger.error(
+      "GetChatHistory - Error retrieving chat history:\n" + err.message
+    );
+    throw err;
+  } finally {
+    db.close((err) => {
+      if (err) {
+        logger.error("GetChatHistory - DB close error:\n" + err.message);
+      }
+      logger.debug("GetChatHistory - Closed the database connection.");
+    });
+  }
+}
+
 module.exports = {
   initDb,
   getAllPluginsFromDb,
   saveNewPluginToDb,
   getPluginById,
   saveUserRequestForExistingPlugin,
+  saveChatMessage,
+  getChatHistory
 };
