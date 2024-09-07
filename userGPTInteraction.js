@@ -219,105 +219,192 @@ async function getChatGptResponse(request) {
 }
 
 // Function to handle the ChatGPT response
+// async function handleGPTResponse(gptResponse) {
+//   try {
+//     const responseObject = JSON.parse(gptResponse);
+//     // Updating global variables
+//     state.currentPluginJson = {
+//       code: responseObject.newPluginCode,
+//       dependencies: responseObject.newPluginDependencies,
+//       description: responseObject.pluginDescription,
+//     };
+//     // No suitable plugin found: producing and executing a new one
+//     if (
+//       responseObject.response === "no" &&
+//       responseObject.newPluginCode !== "null"
+//     ) {
+//       logger.info("Executing new plugin...");
+//       const newPluginCode = responseObject.newPluginCode;
+//       const pluginArguments = responseObject.pluginArguments;
+//       const dependencies = responseObject.newPluginDependencies;
+//       // Dynamically install the dependencies provided by the GPT response
+//       installDependencies(dependencies);
+//       // Executing the plugin
+//       try {
+//         logger.debug("Started execution of new plugin.");
+//         state.currentPluginError = "";
+//         // Execute the new plugin with the provided arguments
+//         const result = await executePlugin(newPluginCode, pluginArguments);
+//         // Printing the result for the user
+//         logger.info("Plugin execution result: " + result);
+//         // Ask the user for the feedback
+//         const userNewPluginFeedback = await askUserPluginFeedback();
+//         // Handle the user feedback
+//         await handleUserNewPluginFeedback(userNewPluginFeedback);
+//       } catch (error) {
+//         logger.error(
+//           "HandleGPTResponse - Error during plugin execution:\n" + error.message
+//         );
+//         responseObject.newPluginCode = await handleMalfunctioningNewPlugin(
+//           error.message,
+//           state.currentUserRequest,
+//           pluginArguments,
+//           responseObject
+//         );
+//         logger.debug("Recursive call...");
+//         // Call recursively the function
+//         handleGPTResponse(JSON.stringify(responseObject));
+//         // If an error is thrown, remove the related dependencies, they will be kept only in case of success
+//         await cleanupUnusedDependencies(dependencies);
+//       }
+//       // Suitable existing plugin found
+//     } else if (
+//       responseObject.response === "yes" &&
+//       responseObject.pluginId !== "null"
+//     ) {
+//       logger.debug(
+//         "HandleGPTResponse - Executing existing plugin with ID " +
+//           responseObject.pluginId
+//       );
+//       // Executing the existing plugin found suitable by ChatGPT
+//       try {
+//         // Retrieve the existing plugin from the database
+//         const pluginDetails = await getPluginById(responseObject.pluginId);
+//         state.currentPluginJson = pluginDetails;
+//         const pluginArguments = responseObject.pluginArguments;
+//         logger.debug(
+//           "HandleGPTResponse - Current plugin JSON:\n" + state.currentPluginJson
+//         );
+//         // Install dependencies (commented out because it shouldn't be needed and they should be already installed)
+//         //installDependencies(pluginDetails.dependencies.join(","));
+//         state.currentPluginError = "";
+//         // Execute the plugin with the arguments provided by ChatGPT
+//         const result = await executePlugin(pluginDetails.code, pluginArguments);
+//         // Printing the result of the plugin execution for the user
+//         logger.info("Plugin execution result: " + result);
+//         // Ask the user for the feedback
+//         const userExistingPluginFeedback = await askUserPluginFeedback();
+//         // Handle the user feedback
+//         await handleUserExistingPluginFeedback(userExistingPluginFeedback);
+//       } catch (error) {
+//         console.error("Error during plugin execution:", error.message);
+//         logger.debug("HandleGPTResponse - New plugin error intercepted.");
+//         await handleMalfunctioningExisistingPlugin(
+//           error.message,
+//           pluginDetails,
+//           state.currentUserRequest,
+//           pluginArguments
+//         );
+//         // Recall recursively the function.
+//         handleGPTResponse(gptResponse);
+//       }
+//       // If eventually no new or existing plugin is provided
+//     } else {
+//       logger.error("HandleGPTResponse - No valid plugin to execute.");
+//     }
+//   } catch (err) {
+//     logger.error(
+//       "HandleGPTResponse - Error handling GPT response: " + err.message
+//     );
+//   }
+// }
 async function handleGPTResponse(gptResponse) {
   try {
     const responseObject = JSON.parse(gptResponse);
-    // Updating global variables
+    
     state.currentPluginJson = {
       code: responseObject.newPluginCode,
       dependencies: responseObject.newPluginDependencies,
       description: responseObject.pluginDescription,
     };
-    // No suitable plugin found: producing and executing a new one
-    if (
-      responseObject.response === "no" &&
-      responseObject.newPluginCode !== "null"
-    ) {
+    
+    if (responseObject.response === "no" && responseObject.newPluginCode !== "null") {
       logger.info("Executing new plugin...");
       const newPluginCode = responseObject.newPluginCode;
       const pluginArguments = responseObject.pluginArguments;
       const dependencies = responseObject.newPluginDependencies;
+      
       // Dynamically install the dependencies provided by the GPT response
       installDependencies(dependencies);
-      // Executing the plugin
+      
       try {
         logger.debug("Started execution of new plugin.");
         state.currentPluginError = "";
-        // Execute the new plugin with the provided arguments
+        
         const result = await executePlugin(newPluginCode, pluginArguments);
-        // Printing the result for the user
         logger.info("Plugin execution result: " + result);
-        // Ask the user for the feedback
+        
         const userNewPluginFeedback = await askUserPluginFeedback();
-        // Handle the user feedback
         await handleUserNewPluginFeedback(userNewPluginFeedback);
+        
       } catch (error) {
         logger.error(
           "HandleGPTResponse - Error during plugin execution:\n" + error.message
         );
+        
         responseObject.newPluginCode = await handleMalfunctioningNewPlugin(
           error.message,
           state.currentUserRequest,
           pluginArguments,
           responseObject
         );
+        
         logger.debug("Recursive call...");
-        // Call recursively the function
-        handleGPTResponse(JSON.stringify(responseObject));
-        // If an error is thrown, remove the related dependencies, they will be kept only in case of success
+        await handleGPTResponse(JSON.stringify(responseObject));
+        
+        // Handle cleanup of unused dependencies
         await cleanupUnusedDependencies(dependencies);
       }
-      // Suitable existing plugin found
-    } else if (
-      responseObject.response === "yes" &&
-      responseObject.pluginId !== "null"
-    ) {
+    } else if (responseObject.response === "yes" && responseObject.pluginId !== "null") {
       logger.debug(
         "HandleGPTResponse - Executing existing plugin with ID " +
-          responseObject.pluginId
+        responseObject.pluginId
       );
-      // Executing the existing plugin found suitable by ChatGPT
+      
       try {
-        // Retrieve the existing plugin from the database
         const pluginDetails = await getPluginById(responseObject.pluginId);
         state.currentPluginJson = pluginDetails;
         const pluginArguments = responseObject.pluginArguments;
-        logger.debug(
-          "HandleGPTResponse - Current plugin JSON:\n" + state.currentPluginJson
-        );
-        // Install dependencies (commented out because it shouldn't be needed and they should be already installed)
-        //installDependencies(pluginDetails.dependencies.join(","));
+        logger.debug("HandleGPTResponse - Current plugin JSON:\n" + state.currentPluginJson);
+        
         state.currentPluginError = "";
-        // Execute the plugin with the arguments provided by ChatGPT
         const result = await executePlugin(pluginDetails.code, pluginArguments);
-        // Printing the result of the plugin execution for the user
         logger.info("Plugin execution result: " + result);
-        // Ask the user for the feedback
+        
         const userExistingPluginFeedback = await askUserPluginFeedback();
-        // Handle the user feedback
         await handleUserExistingPluginFeedback(userExistingPluginFeedback);
+        
       } catch (error) {
-        console.error("Error during plugin execution:", error.message);
-        logger.debug("HandleGPTResponse - New plugin error intercepted.");
+        logger.error("HandleGPTResponse - Error executing existing plugin: " + error.message);
+        
         await handleMalfunctioningExisistingPlugin(
           error.message,
           pluginDetails,
           state.currentUserRequest,
           pluginArguments
         );
-        // Recall recursively the function.
-        handleGPTResponse(gptResponse);
+        
+        // Recursively call again to handle updated plugin after malfunction
+        await handleGPTResponse(gptResponse);
       }
-      // If eventually no new or existing plugin is provided
     } else {
       logger.error("HandleGPTResponse - No valid plugin to execute.");
     }
   } catch (err) {
-    logger.error(
-      "HandleGPTResponse - Error handling GPT response: " + err.message
-    );
+    logger.error("HandleGPTResponse - Error handling GPT response: " + err.message);
   }
 }
+
 
 async function handleMalfunctioningNewPlugin(
   pluginErrorMessage,
@@ -342,11 +429,13 @@ async function handleMalfunctioningNewPlugin(
       );
 
     logger.debug("Asking to GPT for the updated plugin code...");
-
     // Making the request to GPT to get the new code
     const updatedPluginCode = await getChatGptResponse(
       malfunctioningNewPluginGPTRequest
     );
+    // Updating chat history
+    await saveChatMessage("application", malfunctioningNewPluginGPTRequest);
+    await saveChatMessage("GPT", updatedPluginCode);
     // Debug printing the new code:
     logger.debug("New plugin code: \n" + updatedPluginCode);
     return updatedPluginCode;

@@ -33,8 +33,9 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
   
   In case of negative response, and when a new plugin is produced, you also have to provide the list of packages' names that have to be installed with npm to run the new plugin, inside the newPluginDependencies field. They have to be expressed with comma separated format, just like the arguments field. If there are no dependencies, the field must be an empty array. The pluginArguments field must be a string that can be used "as is" to execute the plugin, containing also the parameters to call it extracing them from the user request. They must be comma separated. If no arguments are needed use "" and not "none" or any other word, only the empty quotes. 
   The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
-  There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
   As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
+  There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
+  
   
   Input Data
   Below are the data you need to use to respond:
@@ -46,7 +47,8 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
     pluginsJson +
     "\n" +
     `\nchatHistory:\n` +
-    chatHistory;
+    chatHistory +
+    "\n\n REMEMBER YOU CAN RESPOND ONLY WITH A PURE JSON! THIS IS A FUNDAMENTAL REQUIREMENT!";
 
   return initialGPTRequest;
 }
