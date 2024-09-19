@@ -5,7 +5,7 @@ const logger = require("./logger");
 
 // Function to initialize the database
 async function initDb() {
-  const db = new sqlite3.Database("./plugin-database.db", (err) => {
+  const db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error("InitDb - DB connection error:\n" + err.message);
     }
@@ -66,7 +66,7 @@ async function initDb() {
 // Function that retrieves all the plugins saved to the database
 async function getAllPluginsFromDb() {
   // Connect to the database
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       console.error(
         "GetAllPluginsFromDb - DB connection error:\n" + err.message
@@ -133,7 +133,7 @@ async function getAllPluginsFromDb() {
 // Function to save a new plugin to the database
 async function saveNewPluginToDb(plugin, userRequestString) {
   // Connect to the database
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(err.message);
     }
@@ -195,18 +195,18 @@ async function saveNewPluginToDb(plugin, userRequestString) {
     throw err;
   } finally {
     // Close the database connection
-    db.close((err) => {
-      if (err) {
-        console.error(err.message);
-      }
+    try {
+      await db.close();
       logger.debug("SaveNewPluginToDb - Closed the database connection.");
-    });
+    } catch (err) {
+      logger.error("SaveNewPluginToDb - DB close error:\n" + err.message);
+    }
   }
 }
 
 // Function to get a plugin from database by id
 async function getPluginById(pluginId) {
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(err.message);
     }
@@ -252,7 +252,7 @@ async function getPluginById(pluginId) {
 // Function to save a new request associated to an exisiting plugin to the database
 async function saveUserRequestForExistingPlugin(pluginId, userRequestString) {
   // Connect to the database
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(err.message);
     }
@@ -304,7 +304,7 @@ async function saveUserRequestForExistingPlugin(pluginId, userRequestString) {
   } finally {
     try {
       // Close the database connection
-      await db.close(err);
+      await db.close();
     } catch (err) {
       logger.error(
         "SaveUserRequestForExistingPlugin - DB close error:\n" + err.message
@@ -318,7 +318,7 @@ async function saveUserRequestForExistingPlugin(pluginId, userRequestString) {
 
 // Function to save a message to chat history
 async function saveChatMessage(role, content) {
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(err.message);
     }
@@ -350,7 +350,7 @@ async function saveChatMessage(role, content) {
 
 // Function to retrieve chat history
 async function getChatHistory() {
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(err.message);
     }
@@ -382,7 +382,7 @@ async function getChatHistory() {
 //Function to update a plugin's code specifying the ID
 async function updatePluginCode(pluginId, updatedCode) {
   // Connect to the database
-  let db = new sqlite3.Database("./plugin-database.db", (err) => {
+  let db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error(`UpdatePluginCode - DB connection error:\n${err.message}`);
     }

@@ -19,7 +19,6 @@ const {
 const { executePlugin } = require("./pluginExecution");
 const { state, readline, sanitizeInput } = require("./utils");
 const logger = require("./logger");
-const { log } = require("winston");
 
 // ChatGPT connection parameters
 const apiKey = "213438401d774c4b99831f52b12ebd3c"; // API key for ChatGPT
@@ -120,9 +119,9 @@ async function handleUserNewPluginFeedback(feedback) {
     logger.debug(GPTNegativeFeedbackNewPluginRequest);
     await handleGPTResponse(newGPTResponse);
     // Ask again the user for the feedback
-    const userNewPluginFeedback = await askUserPluginFeedback();
+    //const userNewPluginFeedback = await askUserPluginFeedback();
     // Handle the user feedback again, and so on until it is positive
-    await handleUserNewPluginFeedback(userNewPluginFeedback);
+    //await handleUserNewPluginFeedback(userNewPluginFeedback);
   }
 }
 
@@ -175,9 +174,9 @@ async function handleUserExistingPluginFeedback(feedback) {
     logger.debug(GPTNegativeFeedbackExistingPluginRequest);
     await handleGPTResponse(newGPTResponse);
     // Ask again the user for the feedback
-    const userExistingPluginFeedback = await askUserPluginFeedback();
+   // const userExistingPluginFeedback = await askUserPluginFeedback();
     // Handle the user feedback again, and so on until a positive feedback
-    await handleUserExistingPluginFeedback(userExistingPluginFeedback);
+    //await handleUserExistingPluginFeedback(userExistingPluginFeedback);
   }
 }
 
@@ -370,12 +369,12 @@ async function handleGPTResponse(gptResponse) {
         "HandleGPTResponse - Executing existing plugin with ID " +
         responseObject.pluginId
       );
-      
+      // Getting the plugin from DB
+      const pluginDetails = await getPluginById(responseObject.pluginId);
       try {
-        const pluginDetails = await getPluginById(responseObject.pluginId);
         state.currentPluginJson = pluginDetails;
         const pluginArguments = responseObject.pluginArguments;
-        logger.debug("HandleGPTResponse - Current plugin JSON:\n" + state.currentPluginJson);
+        logger.debug("HandleGPTResponse - Current plugin JSON:\n" + JSON.stringify(state.currentPluginJson));
         
         state.currentPluginError = "";
         const result = await executePlugin(pluginDetails.code, pluginArguments);
@@ -393,7 +392,6 @@ async function handleGPTResponse(gptResponse) {
           state.currentUserRequest,
           pluginArguments
         );
-        
         // Recursively call again to handle updated plugin after malfunction
         await handleGPTResponse(gptResponse);
       }
@@ -404,7 +402,6 @@ async function handleGPTResponse(gptResponse) {
     logger.error("HandleGPTResponse - Error handling GPT response: " + err.message);
   }
 }
-
 
 async function handleMalfunctioningNewPlugin(
   pluginErrorMessage,
@@ -459,6 +456,7 @@ async function handleMalfunctioningExisistingPlugin(
       " has been detecting. Trying to solve the problem..."
   );
   //Get the chat history
+  logger.debug("Getting chat history...");
   let chatHistory = await getChatHistory();
   let malfunctioningExisistingPluginGPTRequest =
     createGPTMalfunctioningPluginRequest(
@@ -473,6 +471,9 @@ async function handleMalfunctioningExisistingPlugin(
     const updatedPluginCode = await getChatGptResponse(
       malfunctioningExisistingPluginGPTRequest
     );
+    // Updating chat history
+    await saveChatMessage("application", malfunctioningExisistingPluginGPTRequest);
+    await saveChatMessage("GPT", updatedPluginCode);
     // Debug printing the new code:
     logger.debug("New plugin code: \n" + updatedPluginCode);
     // Saving updated plugin code to database

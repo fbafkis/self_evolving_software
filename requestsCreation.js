@@ -1,3 +1,4 @@
+const { sanitizeInput } = require("./utils");
 // The intial request
 function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
   let initialGPTRequest =
@@ -47,7 +48,7 @@ function createGPTInitialRequest(currentUserRequest, pluginsJson, chatHistory) {
     pluginsJson +
     "\n" +
     `\nchatHistory:\n` +
-    chatHistory +
+    chatHistory + 
     "\n\n REMEMBER YOU CAN RESPOND ONLY WITH A PURE JSON! THIS IS A FUNDAMENTAL REQUIREMENT!";
 
   return initialGPTRequest;
@@ -112,7 +113,8 @@ You also have to provide the list of packages' names that have to be installed w
 The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
 There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
 As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
-chatHistory:\n` + chatHistory;
+chatHistory:\n` +chatHistory  
++ `\n\n  REMEMBER YOU CAN RESPOND ONLY WITH A PURE JSON! THIS IS A FUNDAMENTAL REQUIREMENT!`;
 
   return negativeFeedbackNewPluginGPTRequest;
 }
@@ -183,7 +185,8 @@ function createGPTNegativeFeedbackExistingPluginRequest(
   The pluginDescription field is a description that can be used by yourself in the future to identify the new plugin in a more effective and precise way. 
   There must be nothing else than the JSON in your response. It is a fundamental requirement. You can ONLY answer with a JSON object and no sentences or other answers or words, or titles like "Output:" before the JSON are admitted. It must be a clean JSON.
   As additional information you can use there is also the history of the conversation between this application and yourself. It will be under the "chatHistory" field of the input and it has a JSON format. 
-  chatHistory:\n` + chatHistory;
+  chatHistory:\n` + chatHistory
+  + `\n\n  REMEMBER YOU CAN RESPOND ONLY WITH A PURE JSON! THIS IS A FUNDAMENTAL REQUIREMENT!`;;
 
   return negativeFeedbackNewPluginGPTRequest;
 }

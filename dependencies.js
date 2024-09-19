@@ -22,7 +22,7 @@ async function cleanupUnusedDependencies(dependencies) {
     return;
   }
   // Database objects
-  const db = new sqlite3.Database("./plugin-database.db", (err) => {
+  const db = new sqlite3.Database("./app-database.db", (err) => {
     if (err) {
       logger.error("InstallDependencies - DB connection error:", err.message);
     }
